@@ -14,9 +14,8 @@ namespace Application.Modules.Reports
         public async Task<string> HandleAsync(Stream fileStream)
         {
             string filetext = await extractTextPort.PDFExtractAsync(fileStream);
-            Console.WriteLine($"Extracted text: {filetext}");
             string report = await aiService.GenerateReportAsync(filetext);
-            return filetext;
+            return report;
         }
     }
 }

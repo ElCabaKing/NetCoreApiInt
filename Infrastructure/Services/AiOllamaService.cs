@@ -22,38 +22,30 @@ namespace Infrastructure.Services
 
         public async Task<string> GenerateResponseAsync(string prompt)
         {
-            try
+            var model = _configuration[ConfigurationConstants.OllamaModelName] ?? "llama2";
+            var requestBody = new
             {
-                var model = _configuration[ConfigurationConstants.OllamaModelName] ?? "llama2";
-                var requestBody = new
-                {
-                    model = model,
-                    prompt = prompt,
-                    stream = false
-                };
+                model = model,
+                prompt = prompt,
+                stream = false
+            };
 
-                var jsonContent = new StringContent(
-                    JsonSerializer.Serialize(requestBody),
-                    Encoding.UTF8,
-                    "application/json"
-                );
+            var jsonContent = new StringContent(
+                JsonSerializer.Serialize(requestBody),
+                Encoding.UTF8,
+                "application/json"
+            );
 
-                var response = await _httpClient.PostAsync($"{_ollamaUrl}/api/generate", jsonContent);
-                
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new HttpRequestException($"Ollama API returned status code: {response.StatusCode}");
-                }
+            var response = await _httpClient.PostAsync($"{_ollamaUrl}/api/generate", jsonContent);
+            var responseContent = await response.Content.ReadAsStringAsync();
 
-                var responseContent = await response.Content.ReadAsStringAsync();
-                var jsonResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
-                
-                return jsonResponse.GetProperty("response").GetString() ?? "No response generated";
-            }
-            catch (Exception ex)
+            if (!response.IsSuccessStatusCode)
             {
-                return $"Error: {ex.Message}";
+                throw new HttpRequestException($"Ollama API returned status code: {response.StatusCode}. Body: {responseContent}");
             }
+
+            var jsonResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
+            return jsonResponse.GetProperty("response").GetString() ?? "No response generated";
         }
 
         public async Task<string> GenerateReportAsync(string text)
