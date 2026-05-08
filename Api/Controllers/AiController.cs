@@ -57,21 +57,9 @@ namespace Api.Controllers
         [HttpPost("report")]
         public async Task<IActionResult> GenerateReport([FromBody] ReportRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request?.Text))
-            {
-                return BadRequest(new { error = "Text cannot be empty" });
-            }
-
             try
             {
-                _logger.LogInformation("Generating report from provided text");
-                var response = await _aiService.GenerateReportAsync(request.Text);
-                
-                return Ok(new
-                {
-                    success = true,
-                    report = response
-                });
+            
             }
             catch (Exception ex)
             {
@@ -88,6 +76,6 @@ namespace Api.Controllers
 
     public class ReportRequest
     {
-        public string Text { get; set; }
+        public File file { get; set; }
     }
 }
