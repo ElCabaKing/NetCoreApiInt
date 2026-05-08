@@ -1,21 +1,21 @@
 namespace Api.Controllers
 {
+    using Api.Request;
+    using Application.Modules.Reports;
     using Application.Ports;
     using Microsoft.AspNetCore.Mvc;
     using System.Threading.Tasks;
 
     [ApiController]
     [Route("api/[controller]")]
-    public class AiController : ControllerBase
+    public class AiController(
+        IAiServicePort aiService,
+        ILogger<AiController> logger,
+        GenerateReportHandler generateReportHandler) : ControllerBase
     {
-        private readonly IAiServicePort _aiService;
-        private readonly ILogger<AiController> _logger;
-
-        public AiController(IAiServicePort aiService, ILogger<AiController> logger)
-        {
-            _aiService = aiService;
-            _logger = logger;
-        }
+        private readonly IAiServicePort _aiService = aiService;
+        private readonly ILogger<AiController> _logger = logger;
+        private readonly GenerateReportHandler _generateReportHandler = generateReportHandler;
 
         /// <summary>
         /// Send a message/prompt to Ollama and get a response
@@ -34,7 +34,7 @@ namespace Api.Controllers
             {
                 _logger.LogInformation($"Sending message to Ollama: {request.Prompt}");
                 var response = await _aiService.GenerateResponseAsync(request.Prompt);
-                
+
                 return Ok(new
                 {
                     success = true,
@@ -55,11 +55,15 @@ namespace Api.Controllers
         /// <param name="request">The report request containing text to generate report from</param>
         /// <returns>The generated report</returns>
         [HttpPost("report")]
-        public async Task<IActionResult> GenerateReport([FromBody] ReportRequest request)
+        public async Task<IActionResult> GenerateReport([FromForm] ReportRequest request)
         {
             try
             {
-            
+                return Ok(new
+                {
+                    success = true,
+                    report = await _generateReportHandler.HandleAsync(request.File.OpenReadStream())
+                });
             }
             catch (Exception ex)
             {
@@ -67,15 +71,5 @@ namespace Api.Controllers
                 return StatusCode(500, new { error = "Failed to generate report", details = ex.Message });
             }
         }
-    }
-
-    public class MessageRequest
-    {
-        public string Prompt { get; set; }
-    }
-
-    public class ReportRequest
-    {
-        public File file { get; set; }
     }
 }

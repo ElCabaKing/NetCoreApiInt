@@ -1,6 +1,7 @@
-namespace Infastructure.Services
+namespace Infrastructure.Services
 {
     using Application.Ports;
+    using Infrastructure.Constants;
     using Microsoft.Extensions.Configuration;
     using System.Text;
     using System.Text.Json;
@@ -16,14 +17,14 @@ namespace Infastructure.Services
         {
             _httpClient = httpClient;
             _configuration = configuration;
-            _ollamaUrl = _configuration["Ollama:Url"] ?? "http://localhost:11434";
+            _ollamaUrl = _configuration[ConfigurationConstants.OllamaUrl] ?? "http://localhost:11434";
         }
 
         public async Task<string> GenerateResponseAsync(string prompt)
         {
             try
             {
-                var model = _configuration["Ollama:Model"] ?? "llama2";
+                var model = _configuration[ConfigurationConstants.OllamaModelName] ?? "llama2";
                 var requestBody = new
                 {
                     model = model,
