@@ -10,12 +10,13 @@ namespace Application.Modules.Reports
         IExtractTextPort extractTextPort
     )
     {
-
-        public async Task<string> HandleAsync(Stream fileStream)
+        public async IAsyncEnumerable<string> HandleStreamAsync(Stream fileStream)
         {
             string filetext = await extractTextPort.PDFExtractAsync(fileStream);
-            string report = await aiService.GenerateReportAsync(filetext);
-            return report;
+            await foreach (var chunk in aiService.GenerateResponseStreamAsync(filetext))
+            {
+                yield return chunk;
+            }
         }
     }
 }

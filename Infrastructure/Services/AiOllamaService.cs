@@ -1,57 +1,108 @@
-namespace Infrastructure.Services
+namespace Infrastructure.Services;
+
+using Application.Ports;
+using Infrastructure.Constants;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using System.Text;
+using System.Text.Json;
+
+public class AiOllamaService : IAiServicePort
 {
-    using Application.Ports;
-    using Infrastructure.Constants;
-    using Microsoft.Extensions.Configuration;
-    using System.Text;
-    using System.Text.Json;
-    using System.Threading.Tasks;
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<AiOllamaService> _logger;
+    private readonly string _ollamaUrl;
+    private readonly string _model;
 
-    public class AiOllamaService : IAiServicePort
+    public AiOllamaService(
+        HttpClient httpClient,
+        IConfiguration configuration,
+        ILogger<AiOllamaService> logger)
     {
-        private readonly HttpClient _httpClient;
-        private readonly IConfiguration _configuration;
-        private readonly string _ollamaUrl;
+        _httpClient = httpClient;
+        _logger = logger;
 
-        public AiOllamaService(HttpClient httpClient, IConfiguration configuration)
+        _ollamaUrl =
+            configuration[ConfigurationConstants.OllamaUrl]
+            ?? "http://localhost:11434";
+
+        _model =
+            configuration[ConfigurationConstants.OllamaModelName]
+            ?? "llama2";
+    }
+
+    public async IAsyncEnumerable<string> GenerateResponseStreamAsync(
+        string prompt)
+    {
+        var requestBody = new
         {
-            _httpClient = httpClient;
-            _configuration = configuration;
-            _ollamaUrl = _configuration[ConfigurationConstants.OllamaUrl] ?? "http://localhost:11434";
-        }
+            model = _model,
+            system = ModelConstants.SystemPrompt,
+            prompt,
+            stream = true
+        };
 
-        public async Task<string> GenerateResponseAsync(string prompt)
+        var jsonContent = new StringContent(
+            JsonSerializer.Serialize(requestBody),
+            Encoding.UTF8,
+            "application/json"
+        );
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"{_ollamaUrl}/api/generate"
+        );
+
+        request.Content = jsonContent;
+
+        using var response = await _httpClient.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead
+        );
+
+        response.EnsureSuccessStatusCode();
+
+        await using var stream =
+            await response.Content.ReadAsStreamAsync();
+
+        using var reader = new StreamReader(stream);
+
+        while (await reader.ReadLineAsync() is { } line)
         {
-            var model = _configuration[ConfigurationConstants.OllamaModelName] ?? "llama2";
-            var requestBody = new
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            var jsonResponse =
+                JsonSerializer.Deserialize<JsonElement>(line);
+
+            if (!jsonResponse.TryGetProperty(
+                    "response",
+                    out var responseElement))
             {
-                model = model,
-                prompt = prompt,
-                stream = false
-            };
-
-            var jsonContent = new StringContent(
-                JsonSerializer.Serialize(requestBody),
-                Encoding.UTF8,
-                "application/json"
-            );
-
-            var response = await _httpClient.PostAsync($"{_ollamaUrl}/api/generate", jsonContent);
-            var responseContent = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new HttpRequestException($"Ollama API returned status code: {response.StatusCode}. Body: {responseContent}");
+                continue;
             }
 
-            var jsonResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
-            return jsonResponse.GetProperty("response").GetString() ?? "No response generated";
-        }
+            var chunk = responseElement.GetString();
 
-        public async Task<string> GenerateReportAsync(string text)
-        {
-            var prompt = $"Generate a professional report based on the following text:\n\n{text}";
-            return await GenerateResponseAsync(prompt);
+            if (string.IsNullOrWhiteSpace(chunk))
+                continue;
+
+            yield return chunk;
         }
     }
+
+    public async Task<string> GenerateResponseAsync(string prompt)
+    {
+        var builder = new StringBuilder();
+
+        await foreach (var chunk in GenerateResponseStreamAsync(prompt))
+        {
+            builder.Append(chunk);
+        }
+
+        return builder.ToString();
+    }
+
+    public Task<string> GenerateReportAsync(string text)
+        => GenerateResponseAsync(text);
 }

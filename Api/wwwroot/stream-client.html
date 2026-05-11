@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Stream Report Client</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;max-width:900px;margin:2rem auto;padding:0 1rem}
+    form{display:flex;gap:.5rem;align-items:center}
+    pre{background:#111;color:#e6e6e6;padding:1rem;border-radius:6px;white-space:pre-wrap;word-break:break-word;min-height:200px}
+    .status{margin-top:.5rem;color:#666}
+  </style>
+</head>
+<body>
+  <h1>Enviar PDF y ver stream</h1>
+  <form id="uploadForm">
+    <input type="file" id="fileInput" name="file" accept="application/pdf" required />
+    <button type="submit">Enviar</button>
+  </form>
+  <div class="status" id="status">Listo</div>
+  <pre id="output"></pre>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const fileInput = document.getElementById('fileInput');
+    const output = document.getElementById('output');
+    const status = document.getElementById('status');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      output.textContent = '';
+      status.textContent = 'Enviando...';
+
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const fd = new FormData();
+      fd.append('file', file);
+
+      try {
+        const resp = await fetch('http://localhost:5238/api/ai/stream-report', {
+          method: 'POST',
+          body: fd
+        });
+
+        if (!resp.ok) {
+          status.textContent = 'Error: ' + resp.status + ' ' + resp.statusText;
+          return;
+        }
+
+        status.textContent = 'Recibiendo stream...';
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          output.textContent += decoder.decode(value, { stream: true });
+          window.scrollTo(0, document.body.scrollHeight);
+        }
+
+        // final flush
+        output.textContent += decoder.decode();
+        status.textContent = 'Completado';
+      } catch (err) {
+        status.textContent = 'Error: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -24,6 +24,11 @@ public static class DependencyInyection
         // Register report handler
         services.AddScoped<GenerateReportHandler>();
 
+        services.AddHttpClient<IAiServicePort, AiOllamaService>(client =>
+{
+    client.Timeout = Timeout.InfiniteTimeSpan;
+});
+
         return services;
     }
 }
